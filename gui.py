@@ -53,6 +53,15 @@ class SistemaInventarioGUI(ctk.CTk):
         for widget in self.frame_principal.winfo_children():
             widget.destroy()
 
+    def leer_numero(self, valor, nombre):
+        texto = valor.strip().replace(",", ".")
+        if not texto:
+            raise ValueError(f"Escribe {nombre}.")
+        try:
+            return float(texto)
+        except ValueError:
+            raise ValueError(f"{nombre.capitalize()} debe ser un número válido.")
+
     def mostrar_inventario(self):
         self.limpiar_frame_principal()
         
@@ -152,9 +161,9 @@ class SistemaInventarioGUI(ctk.CTk):
 
         import main
         try:
-            cantidad = float(self.entry_cantidad.get().replace(',', '.'))
-            precio = float(self.entry_precio.get().replace(',', '.'))
-            costo = float(self.entry_costo.get().replace(',', '.'))
+            cantidad = self.leer_numero(self.entry_cantidad.get(), "la cantidad")
+            precio = self.leer_numero(self.entry_precio.get(), "el precio")
+            costo = self.leer_numero(self.entry_costo.get(), "el costo")
 
             # El backend se encargará de las validaciones matemáticas estandarizadas
             main.CrearProducto(nombre, cantidad, precio, costo, unidad)
@@ -240,6 +249,8 @@ class SistemaInventarioGUI(ctk.CTk):
 
         frame_edicion = ctk.CTkFrame(self.frame_principal)
         frame_edicion.pack(fill="x", padx=20, pady=10)
+        for columna in range(3):
+            frame_edicion.grid_columnconfigure(columna, weight=1)
         ctk.CTkLabel(
             frame_edicion,
             text="Editar producto seleccionado",
@@ -310,7 +321,7 @@ class SistemaInventarioGUI(ctk.CTk):
 
     def ejecutar_actualizar_umbral(self):
         try:
-            umbral = float(self.entry_umbral_stock.get().replace(',', '.'))
+            umbral = self.leer_numero(self.entry_umbral_stock.get(), "el stock mínimo")
             if umbral < 0:
                 raise ValueError("El stock mínimo no puede ser negativo")
             self.umbral_stock = umbral
@@ -359,9 +370,9 @@ class SistemaInventarioGUI(ctk.CTk):
             main.ActualizarProducto(
                 int(valores[0]),
                 self.entry_config_nombre.get(),
-                float(self.entry_config_cantidad.get().replace(',', '.')),
-                float(self.entry_config_precio.get().replace(',', '.')),
-                float(self.entry_config_costo.get().replace(',', '.')),
+                self.leer_numero(self.entry_config_cantidad.get(), "la cantidad"),
+                self.leer_numero(self.entry_config_precio.get(), "el precio"),
+                self.leer_numero(self.entry_config_costo.get(), "el costo"),
                 self.combo_config_unidad.get()
             )
             self.label_mensaje_configuracion.configure(
@@ -444,6 +455,8 @@ class SistemaInventarioGUI(ctk.CTk):
 
         frame_formulario = ctk.CTkFrame(self.frame_principal)
         frame_formulario.pack(fill="x", padx=20, pady=10)
+        for columna in range(4):
+            frame_formulario.grid_columnconfigure(columna, weight=1)
 
         self.combo_producto_movimiento = ctk.CTkComboBox(
             frame_formulario,
@@ -468,10 +481,10 @@ class SistemaInventarioGUI(ctk.CTk):
             text="Registrar Movimiento",
             command=self.ejecutar_registrar_movimiento,
             fg_color="#1f538d"
-        ).grid(row=0, column=3, padx=10, pady=15)
+        ).grid(row=1, column=0, columnspan=4, padx=10, pady=10, sticky="ew")
 
         self.label_mensaje_movimiento = ctk.CTkLabel(frame_formulario, text="", text_color="red")
-        self.label_mensaje_movimiento.grid(row=1, column=0, columnspan=4, pady=5)
+        self.label_mensaje_movimiento.grid(row=2, column=0, columnspan=4, pady=5)
 
         frame_historial = ctk.CTkFrame(self.frame_principal)
         frame_historial.pack(fill="both", expand=True, padx=20, pady=10)
@@ -517,7 +530,7 @@ class SistemaInventarioGUI(ctk.CTk):
             if " - " not in producto_seleccionado:
                 raise ValueError("No hay un producto disponible para operar")
             id_producto = int(producto_seleccionado.split(" - ", 1)[0])
-            cantidad = float(self.entry_cantidad_movimiento.get().replace(',', '.'))
+            cantidad = self.leer_numero(self.entry_cantidad_movimiento.get(), "la cantidad")
             tipo_operacion = self.combo_tipo_movimiento.get()
             main.RegistrarMovimiento(id_producto, tipo_operacion, cantidad)
             self.label_mensaje_movimiento.configure(
@@ -566,6 +579,8 @@ class SistemaInventarioGUI(ctk.CTk):
 
         frame_formulario = ctk.CTkFrame(self.frame_principal)
         frame_formulario.pack(fill="x", padx=20, pady=10)
+        for columna in range(5):
+            frame_formulario.grid_columnconfigure(columna, weight=1)
 
         frame_fecha_inicio = ctk.CTkFrame(frame_formulario, fg_color="transparent")
         frame_fecha_inicio.grid(row=0, column=0, padx=10, pady=12)

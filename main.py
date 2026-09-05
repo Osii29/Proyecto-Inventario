@@ -293,9 +293,9 @@ def RegistrarMovimiento(id_producto, tipo_operacion, cantidad_operacion):
                 (id_producto, fecha, tipo_operacion, cantidad_operacion_val, monto_operacion)
             )
             conn.commit()
-        except sqlite3.Error as e:
+        except sqlite3.Error:
             conn.rollback()
-            raise ValueError(f"Error al registrar el movimiento: {e}")
+            raise ValueError("No se pudo guardar el movimiento. Inténtalo de nuevo.")
 
 
 def CrearInforme(fecha_inicio, fecha_fin):
