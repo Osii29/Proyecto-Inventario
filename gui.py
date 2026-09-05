@@ -96,8 +96,10 @@ class SistemaInventarioGUI(ctk.CTk):
         scrollbar.pack(side="right", fill="y")
         self.tabla.pack(side="left", fill="both", expand=True)
         # Contenedor para el formulario de registro
-        frame_formulario = ctk.CTkFrame(self.frame_principal)
+        frame_formulario = ctk.CTkScrollableFrame(self.frame_principal, height=205)
         frame_formulario.pack(fill="x", padx=20, pady=10)
+        for columna in range(4):
+            frame_formulario.grid_columnconfigure(columna, weight=1)
         
         ctk.CTkLabel(frame_formulario, text="Registrar Nuevo Producto", font=ctk.CTkFont(weight="bold")).grid(row=0, column=0, columnspan=4, pady=(10, 5))
 
@@ -121,15 +123,25 @@ class SistemaInventarioGUI(ctk.CTk):
         self.entry_unidad.set("unidad")
         self.entry_unidad.grid(row=2, column=1, padx=10, pady=10)
 
-        btn_guardar = ctk.CTkButton(frame_formulario, text="Guardar Producto", command=self.ejecutar_crear_producto, fg_color="green")
-        btn_guardar.grid(row=2, column=2, padx=10, pady=10)
+        btn_guardar = ctk.CTkButton(
+            frame_formulario,
+            text="Guardar Producto",
+            command=self.ejecutar_crear_producto,
+            fg_color="green"
+        )
+        btn_guardar.grid(row=3, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
 
-        btn_eliminar = ctk.CTkButton(frame_formulario, text="Eliminar Seleccionado", command=self.ejecutar_eliminar_producto, fg_color="#b3261e")
-        btn_eliminar.grid(row=2, column=3, padx=10, pady=10)
+        btn_eliminar = ctk.CTkButton(
+            frame_formulario,
+            text="Eliminar Seleccionado",
+            command=self.ejecutar_eliminar_producto,
+            fg_color="#b3261e"
+        )
+        btn_eliminar.grid(row=3, column=2, columnspan=2, padx=10, pady=10, sticky="ew")
         
         # Etiqueta para mostrar mensajes de error o éxito
         self.label_mensaje = ctk.CTkLabel(frame_formulario, text="", text_color="red")
-        self.label_mensaje.grid(row=3, column=0, columnspan=4, pady=5)
+        self.label_mensaje.grid(row=4, column=0, columnspan=4, pady=5)
 
         # Invocación a la base de datos
         self.cargar_datos_inventario()
