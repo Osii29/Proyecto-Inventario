@@ -21,7 +21,8 @@ def inicializar_db():
                 Precio REAL NOT NULL,
                 Costo REAL NOT NULL,
                 Tipo_unidad TEXT NOT NULL,
-                IsDeleted INTEGER NOT NULL DEFAULT 0
+                IsDeleted INTEGER NOT NULL DEFAULT 0,
+                ID_Visible INTEGER UNIQUE
             );
         ''')
 
@@ -37,6 +38,12 @@ def inicializar_db():
                 FOREIGN KEY (ID_Producto) REFERENCES Productos(ID_Producto)
             );
         ''')
+        cur.execute("PRAGMA table_info(Productos)")
+        columnas_productos = {columna[1] for columna in cur.fetchall()}
+        if "ID_Visible" not in columnas_productos:
+            cur.execute("ALTER TABLE Productos ADD COLUMN ID_Visible INTEGER")
+        cur.execute("UPDATE Productos SET ID_Visible = ID_Producto WHERE ID_Visible IS NULL")
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_productos_id_visible ON Productos(ID_Visible)")
         conn.commit()
 
 
@@ -80,8 +87,11 @@ def ConvertirFecha(fecha, nombre):
     raise ValueError(f"{nombre} debe tener un formato válido (YYYY-MM-DD o YYYY-MM-DD HH:MM:SS)")
 
 
-def CrearProducto(nombre, cantidad, precio, costo, tipo_unidad):
+def CrearProducto(id_visible, nombre, cantidad, precio, costo, tipo_unidad):
     #Crea un producto nuevo y lo guarda en la base de datos.
+    if not isinstance(id_visible, int) or isinstance(id_visible, bool) or id_visible <= 0:
+        raise ValueError("El ID visible debe ser un número entero positivo")
+
     if not isinstance(nombre, str) or not nombre.strip():
         raise ValueError("El nombre es obligatorio")
 
@@ -103,12 +113,15 @@ def CrearProducto(nombre, cantidad, precio, costo, tipo_unidad):
 
     with sqlite3.connect('inventario.db') as conn:
         cur = conn.cursor()
+        cur.execute('''SELECT ID_Producto FROM Productos WHERE ID_Visible = ?;''', (id_visible,))
+        if cur.fetchone() is not None:
+            raise ValueError("El ID visible ya está asignado a otro producto")
         cur.execute(
             '''
-            INSERT INTO Productos (Nombre, Cantidad, Precio, Costo, Tipo_unidad, IsDeleted)
-            VALUES (?, ?, ?, ?, ?, 0)
+            INSERT INTO Productos (Nombre, Cantidad, Precio, Costo, Tipo_unidad, IsDeleted, ID_Visible)
+            VALUES (?, ?, ?, ?, ?, 0, ?)
             ''',
-            (nombre_limpio, cantidad_val, precio_val, costo_val, tipo_unidad_limpio)
+            (nombre_limpio, cantidad_val, precio_val, costo_val, tipo_unidad_limpio, id_visible)
         )
         conn.commit()
 
@@ -117,7 +130,8 @@ def ConsultarInventario():
     #Devuelve todos los productos activos que no han sido eliminados.
     with sqlite3.connect('inventario.db') as conn:
         cur = conn.cursor()
-        cur.execute('''SELECT * FROM Productos WHERE IsDeleted = 0;''')
+        cur.execute('''SELECT ID_Visible, Nombre, Cantidad, Precio, Costo, Tipo_unidad, IsDeleted
+                   FROM Productos WHERE IsDeleted = 0;''')
         return cur.fetchall()
 
 
@@ -127,7 +141,7 @@ def ConsultarHistorial():
         cur = conn.cursor()
         cur.execute(
             '''
-            SELECT h.ID_Operacion, h.ID_Producto, p.Nombre, h.Fecha,
+            SELECT h.ID_Operacion, p.ID_Visible, p.Nombre, h.Fecha,
             h.Tipo_operacion, h.Cantidad_involucrada, h.Monto_operacion
             FROM Historial h
             LEFT JOIN Productos p ON p.ID_Producto = h.ID_Producto
@@ -141,7 +155,8 @@ def ConsultarTodosLosProductos():
     #Devuelve productos activos y eliminados para tareas de administración.
     with sqlite3.connect('inventario.db') as conn:
         cur = conn.cursor()
-        cur.execute('''SELECT * FROM Productos ORDER BY IsDeleted, ID_Producto;''')
+        cur.execute('''SELECT ID_Producto, ID_Visible, Nombre, Cantidad, Precio, Costo, Tipo_unidad, IsDeleted
+                   FROM Productos ORDER BY IsDeleted, ID_Visible;''')
         return cur.fetchall()
 
 
@@ -153,7 +168,7 @@ def RestaurarProducto(id_producto):
     with sqlite3.connect('inventario.db') as conn:
         cur = conn.cursor()
         cur.execute(
-            '''UPDATE Productos SET IsDeleted = 0 WHERE ID_Producto = ? AND IsDeleted = 1;''',
+            '''UPDATE Productos SET IsDeleted = 0 WHERE ID_Visible = ? AND IsDeleted = 1;''',
             (id_producto,)
         )
         if cur.rowcount == 0:
@@ -168,12 +183,13 @@ def EliminarProductoDefinitivamente(id_producto):
 
     with sqlite3.connect('inventario.db') as conn:
         cur = conn.cursor()
-        cur.execute('''SELECT ID_Producto FROM Productos WHERE ID_Producto = ?;''', (id_producto,))
+        cur.execute('''SELECT ID_Producto FROM Productos WHERE ID_Visible = ?;''', (id_producto,))
         if cur.fetchone() is None:
             raise ValueError("El producto no existe")
 
-        cur.execute('''DELETE FROM Historial WHERE ID_Producto = ?;''', (id_producto,))
-        cur.execute('''DELETE FROM Productos WHERE ID_Producto = ?;''', (id_producto,))
+        id_producto_real = cur.fetchone()[0]
+        cur.execute('''DELETE FROM Historial WHERE ID_Producto = ?;''', (id_producto_real,))
+        cur.execute('''DELETE FROM Productos WHERE ID_Producto = ?;''', (id_producto_real,))
         conn.commit()
 
 
@@ -189,10 +205,12 @@ def ReiniciarIdsProductos():
         conn.commit()
 
 
-def ActualizarProducto(id_producto, nombre, cantidad, precio, costo, tipo_unidad):
+def ActualizarProducto(id_producto, nuevo_id_producto, nombre, cantidad, precio, costo, tipo_unidad):
     #Actualiza los datos editables de un producto activo.
     if not isinstance(id_producto, int) or isinstance(id_producto, bool) or id_producto <= 0:
         raise ValueError("El ID del producto es inválido")
+    if not isinstance(nuevo_id_producto, int) or isinstance(nuevo_id_producto, bool) or nuevo_id_producto <= 0:
+        raise ValueError("El nuevo ID debe ser un número entero positivo")
 
     if not isinstance(nombre, str) or not nombre.strip():
         raise ValueError("El nombre es obligatorio")
@@ -213,12 +231,24 @@ def ActualizarProducto(id_producto, nombre, cantidad, precio, costo, tipo_unidad
     with sqlite3.connect('inventario.db') as conn:
         cur = conn.cursor()
         cur.execute(
+            '''SELECT ID_Producto FROM Productos WHERE ID_Visible = ? AND IsDeleted = 0;''',
+            (id_producto,)
+        )
+        producto = cur.fetchone()
+        if producto is None:
+            raise ValueError("El producto no existe o ya fue eliminado")
+        id_producto_real = producto[0]
+        if nuevo_id_producto != id_producto:
+            cur.execute('''SELECT ID_Producto FROM Productos WHERE ID_Visible = ?;''', (nuevo_id_producto,))
+            if cur.fetchone() is not None:
+                raise ValueError("El nuevo ID ya está asignado a otro producto")
+        cur.execute(
             '''
             UPDATE Productos
-            SET Nombre = ?, Cantidad = ?, Precio = ?, Costo = ?, Tipo_unidad = ?
+            SET ID_Visible = ?, Nombre = ?, Cantidad = ?, Precio = ?, Costo = ?, Tipo_unidad = ?
             WHERE ID_Producto = ? AND IsDeleted = 0;
             ''',
-            (nombre.strip(), cantidad_val, precio_val, costo_val, tipo_unidad.strip(), id_producto)
+            (nuevo_id_producto, nombre.strip(), cantidad_val, precio_val, costo_val, tipo_unidad.strip(), id_producto_real)
         )
         if cur.rowcount == 0:
             raise ValueError("El producto no existe o ya fue eliminado")
@@ -232,11 +262,11 @@ def EliminarProducto(id_producto):
 
     with sqlite3.connect('inventario.db') as conn:
         cur = conn.cursor()
-        cur.execute('''SELECT ID_Producto FROM Productos WHERE ID_Producto = ? AND IsDeleted = 0;''', (id_producto,))
+        cur.execute('''SELECT ID_Producto FROM Productos WHERE ID_Visible = ? AND IsDeleted = 0;''', (id_producto,))
         if cur.fetchone() is None:
             raise ValueError("El producto no existe o ya fue eliminado")
 
-        cur.execute('''UPDATE Productos SET IsDeleted = 1 WHERE ID_Producto = ?;''', (id_producto,))
+        cur.execute('''UPDATE Productos SET IsDeleted = 1 WHERE ID_Visible = ?;''', (id_producto,))
         conn.commit()
 
 
@@ -263,13 +293,14 @@ def RegistrarMovimiento(id_producto, tipo_operacion, cantidad_operacion):
         # BEGIN IMMEDIATE bloquea la base de datos para esta transacción.
         # Esto ayuda a evitar inconsistencias si dos operaciones se ejecutan a la vez.
         conn.execute('BEGIN IMMEDIATE')
-        cur.execute('''SELECT Precio, Costo, Cantidad FROM Productos WHERE ID_Producto = ? AND IsDeleted = 0;''', (id_producto,))
+        cur.execute('''SELECT ID_Producto, Precio, Costo, Cantidad FROM Productos
+                   WHERE ID_Visible = ? AND IsDeleted = 0;''', (id_producto,))
         resultado = cur.fetchone()
 
         if resultado is None:
             raise ValueError("No se encontró el producto")
 
-        precio, costo, cantidad_actual = resultado
+        id_producto_real, precio, costo, cantidad_actual = resultado
 
         if tipo_operacion == 'venta':
             if cantidad_operacion_val > cantidad_actual:
@@ -285,12 +316,12 @@ def RegistrarMovimiento(id_producto, tipo_operacion, cantidad_operacion):
             # Actualiza el stock y guarda el movimiento de historial en la misma transacción.
             cur.execute(
                 '''UPDATE Productos SET Cantidad = Cantidad + ? WHERE ID_Producto = ? AND IsDeleted = 0;''',
-                (cambio_stock, id_producto)
+                (cambio_stock, id_producto_real)
             )
             cur.execute(
                 '''INSERT INTO Historial (ID_Producto, Fecha, Tipo_operacion, Cantidad_involucrada, Monto_operacion)
                 VALUES (?, ?, ?, ?, ?);''',
-                (id_producto, fecha, tipo_operacion, cantidad_operacion_val, monto_operacion)
+                (id_producto_real, fecha, tipo_operacion, cantidad_operacion_val, monto_operacion)
             )
             conn.commit()
         except sqlite3.Error:

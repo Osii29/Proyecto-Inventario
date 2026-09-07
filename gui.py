@@ -62,11 +62,28 @@ class SistemaInventarioGUI(ctk.CTk):
         except ValueError:
             raise ValueError(f"{nombre.capitalize()} debe ser un número válido.")
 
+    def leer_entero(self, valor, nombre):
+        texto = valor.strip()
+        if not texto:
+            raise ValueError(f"Escribe {nombre}.")
+        try:
+            return int(texto)
+        except ValueError:
+            raise ValueError(f"{nombre.capitalize()} debe ser un número entero.")
+
     def mostrar_inventario(self):
         self.limpiar_frame_principal()
         
         # Título del módulo
         ctk.CTkLabel(self.frame_principal, text="Módulo: Consultas de Inventario", font=ctk.CTkFont(size=20, weight="bold")).pack(pady=10)
+
+        self.entry_busqueda_inventario = ctk.CTkEntry(
+            self.frame_principal,
+            placeholder_text="Buscar por ID o nombre...",
+            width=320
+        )
+        self.entry_busqueda_inventario.pack(anchor="w", padx=20, pady=(0, 5))
+        self.entry_busqueda_inventario.bind("<KeyRelease>", self.filtrar_inventario)
         
         # Contenedor para la tabla
         frame_tabla = ctk.CTkFrame(self.frame_principal)
@@ -112,14 +129,17 @@ class SistemaInventarioGUI(ctk.CTk):
         
         ctk.CTkLabel(frame_formulario, text="Registrar Nuevo Producto", font=ctk.CTkFont(weight="bold")).grid(row=0, column=0, columnspan=4, pady=(10, 5))
 
+        self.entry_id_visible = ctk.CTkEntry(frame_formulario, placeholder_text="ID (obligatorio)", width=200)
+        self.entry_id_visible.grid(row=1, column=0, padx=10, pady=10)
+
         self.entry_nombre = ctk.CTkEntry(frame_formulario, placeholder_text="Nombre del Producto", width=200)
-        self.entry_nombre.grid(row=1, column=0, padx=10, pady=10)
+        self.entry_nombre.grid(row=1, column=1, padx=10, pady=10)
 
         self.entry_cantidad = ctk.CTkEntry(frame_formulario, placeholder_text="Cantidad Inicial", width=200)
-        self.entry_cantidad.grid(row=1, column=1, padx=10, pady=10)
+        self.entry_cantidad.grid(row=1, column=2, padx=10, pady=10)
 
         self.entry_precio = ctk.CTkEntry(frame_formulario, placeholder_text="Precio de Venta", width=200)
-        self.entry_precio.grid(row=1, column=2, padx=10, pady=10)
+        self.entry_precio.grid(row=1, column=3, padx=10, pady=10)
 
         self.entry_costo = ctk.CTkEntry(frame_formulario, placeholder_text="Costo de Compra", width=200)
         self.entry_costo.grid(row=2, column=0, padx=10, pady=10)
@@ -164,15 +184,17 @@ class SistemaInventarioGUI(ctk.CTk):
             cantidad = self.leer_numero(self.entry_cantidad.get(), "la cantidad")
             precio = self.leer_numero(self.entry_precio.get(), "el precio")
             costo = self.leer_numero(self.entry_costo.get(), "el costo")
+            id_visible = self.leer_entero(self.entry_id_visible.get(), "el ID")
 
             # El backend se encargará de las validaciones matemáticas estandarizadas
-            main.CrearProducto(nombre, cantidad, precio, costo, unidad)
+            main.CrearProducto(id_visible, nombre, cantidad, precio, costo, unidad)
             
             # Notificar éxito, actualizar la tabla y purgar los campos
             self.label_mensaje.configure(text="Producto registrado con éxito", text_color="green")
             self.cargar_datos_inventario()
             
             self.entry_nombre.delete(0, 'end')
+            self.entry_id_visible.delete(0, 'end')
             self.entry_cantidad.delete(0, 'end')
             self.entry_precio.delete(0, 'end')
             self.entry_costo.delete(0, 'end')
@@ -213,15 +235,26 @@ class SistemaInventarioGUI(ctk.CTk):
         # Extracción e inserción de datos desde el backend
         import main  # Asegúrese de que el nombre coincida con su archivo backend
         productos = main.ConsultarInventario()
+        texto_busqueda = self.entry_busqueda_inventario.get().strip().lower()
+        stock_maximo = max((producto[2] for producto in productos), default=0)
+        limite_alerta = stock_maximo * self.umbral_stock / 100
         
         for prod in productos:
+            if texto_busqueda and (
+                texto_busqueda not in str(prod[0]).lower()
+                and texto_busqueda not in prod[1].lower()
+            ):
+                continue
             # prod contiene (ID_Producto, Nombre, Cantidad, Precio, Costo, Tipo_unidad, IsDeleted)
             # Se omite el índice 6 (IsDeleted) para la visualización del usuario
-            stock_bajo = prod[2] <= self.umbral_stock
+            stock_bajo = stock_maximo > 0 and prod[2] <= limite_alerta
             estado = "⚠ Bajo" if stock_bajo else ""
             valores = (prod[0], prod[1], prod[2], f"${prod[3]:.2f}", f"${prod[4]:.2f}", prod[5], estado)
             etiquetas = ("stock_bajo",) if stock_bajo else ()
             self.tabla.insert("", "end", values=valores, tags=etiquetas)
+
+    def filtrar_inventario(self, _evento=None):
+        self.cargar_datos_inventario()
 
     def mostrar_configuracion(self):
         self.limpiar_frame_principal()
@@ -234,11 +267,12 @@ class SistemaInventarioGUI(ctk.CTk):
         frame_umbral = ctk.CTkFrame(self.frame_principal)
         frame_umbral.pack(fill="x", padx=20, pady=10)
 
-        ctk.CTkLabel(frame_umbral, text="Stock mínimo para alertar:").grid(
+        ctk.CTkLabel(frame_umbral, text="Porcentaje mínimo para alertar:").grid(
             row=0, column=0, padx=10, pady=15
         )
         self.entry_umbral_stock = ctk.CTkEntry(frame_umbral, width=180)
         self.entry_umbral_stock.insert(0, str(self.umbral_stock))
+        self.entry_umbral_stock.configure(placeholder_text="Porcentaje (0 a 100)")
         self.entry_umbral_stock.grid(row=0, column=1, padx=10, pady=15)
         ctk.CTkButton(
             frame_umbral,
@@ -249,13 +283,13 @@ class SistemaInventarioGUI(ctk.CTk):
 
         frame_edicion = ctk.CTkFrame(self.frame_principal)
         frame_edicion.pack(fill="x", padx=20, pady=10)
-        for columna in range(3):
+        for columna in range(4):
             frame_edicion.grid_columnconfigure(columna, weight=1)
         ctk.CTkLabel(
             frame_edicion,
             text="Editar producto seleccionado",
             font=ctk.CTkFont(weight="bold")
-        ).grid(row=0, column=0, columnspan=3, pady=(10, 5))
+        ).grid(row=0, column=0, columnspan=4, pady=(10, 5))
 
         self.tabla_configuracion = ttk.Treeview(
             self.frame_principal,
@@ -280,25 +314,20 @@ class SistemaInventarioGUI(ctk.CTk):
         ).pack(side="left", padx=10, pady=8)
         ctk.CTkButton(
             frame_acciones,
-            text="Eliminar definitivamente",
+            text="Eliminar Historial",
             command=self.ejecutar_eliminar_definitivo,
             fg_color="#8b0000",
             hover_color="#5c0000",
             width=220
         ).pack(side="left", padx=10, pady=8)
-        ctk.CTkButton(
-            frame_acciones,
-            text="Reiniciar IDs",
-            command=self.ejecutar_reiniciar_ids,
-            width=150
-        ).pack(side="left", padx=10, pady=8)
-
+        self.entry_config_id = ctk.CTkEntry(frame_edicion, placeholder_text="ID", width=100)
+        self.entry_config_id.grid(row=1, column=0, padx=8, pady=10)
         self.entry_config_nombre = ctk.CTkEntry(frame_edicion, placeholder_text="Nombre", width=180)
-        self.entry_config_nombre.grid(row=1, column=0, padx=8, pady=10)
+        self.entry_config_nombre.grid(row=1, column=1, padx=8, pady=10)
         self.entry_config_cantidad = ctk.CTkEntry(frame_edicion, placeholder_text="Cantidad", width=130)
-        self.entry_config_cantidad.grid(row=1, column=1, padx=8, pady=10)
+        self.entry_config_cantidad.grid(row=1, column=2, padx=8, pady=10)
         self.entry_config_precio = ctk.CTkEntry(frame_edicion, placeholder_text="Precio", width=130)
-        self.entry_config_precio.grid(row=1, column=2, padx=8, pady=10)
+        self.entry_config_precio.grid(row=1, column=3, padx=8, pady=10)
         self.entry_config_costo = ctk.CTkEntry(frame_edicion, placeholder_text="Costo", width=130)
         self.entry_config_costo.grid(row=2, column=0, padx=8, pady=10)
         self.combo_config_unidad = ctk.CTkComboBox(
@@ -313,22 +342,24 @@ class SistemaInventarioGUI(ctk.CTk):
             command=self.ejecutar_editar_producto,
             fg_color="green",
             width=160
-        ).grid(row=2, column=2, padx=8, pady=10)
+        ).grid(row=2, column=2, columnspan=2, padx=8, pady=10, sticky="ew")
 
         self.label_mensaje_configuracion = ctk.CTkLabel(frame_edicion, text="", text_color="red")
-        self.label_mensaje_configuracion.grid(row=3, column=0, columnspan=3, pady=5)
+        self.label_mensaje_configuracion.grid(row=3, column=0, columnspan=4, pady=5)
         self.cargar_datos_configuracion()
 
     def ejecutar_actualizar_umbral(self):
         try:
-            umbral = self.leer_numero(self.entry_umbral_stock.get(), "el stock mínimo")
-            if umbral < 0:
-                raise ValueError("El stock mínimo no puede ser negativo")
+            umbral = self.leer_numero(self.entry_umbral_stock.get(), "el porcentaje mínimo")
+            if umbral < 0 or umbral > 100:
+                raise ValueError("El porcentaje debe estar entre 0 y 100")
             self.umbral_stock = umbral
             self.label_mensaje_configuracion.configure(
-                text="Umbral de alerta actualizado", text_color="green"
+                text="Porcentaje de alerta actualizado", text_color="green"
             )
             self.cargar_datos_configuracion()
+            if hasattr(self, "tabla") and self.tabla.winfo_exists():
+                self.cargar_datos_inventario()
         except ValueError as error_backend:
             self.label_mensaje_configuracion.configure(text=str(error_backend), text_color="red")
 
@@ -336,11 +367,13 @@ class SistemaInventarioGUI(ctk.CTk):
         for fila in self.tabla_configuracion.get_children():
             self.tabla_configuracion.delete(fila)
         for producto in main.ConsultarTodosLosProductos():
-            eliminado = producto[6] == 1
+            eliminado = producto[7] == 1
             estado = "Eliminado" if eliminado else "Activo"
-            valores = producto[:6] + (estado,)
+            valores = producto[1:7] + (estado,)
             etiquetas = ("eliminado",) if eliminado else ()
-            self.tabla_configuracion.insert("", "end", values=valores, tags=etiquetas)
+            self.tabla_configuracion.insert(
+                "", "end", iid=str(producto[0]), values=valores, tags=etiquetas
+            )
 
     def cargar_producto_configuracion(self, _evento=None):
         seleccion = self.tabla_configuracion.selection()
@@ -348,6 +381,7 @@ class SistemaInventarioGUI(ctk.CTk):
             return
         valores = self.tabla_configuracion.item(seleccion[0], "values")
         campos = (
+            (self.entry_config_id, valores[0]),
             (self.entry_config_nombre, valores[1]),
             (self.entry_config_cantidad, valores[2]),
             (self.entry_config_precio, valores[3]),
@@ -368,7 +402,8 @@ class SistemaInventarioGUI(ctk.CTk):
         try:
             valores = self.tabla_configuracion.item(seleccion[0], "values")
             main.ActualizarProducto(
-                int(valores[0]),
+                self.leer_entero(valores[0], "el ID actual"),
+                self.leer_entero(self.entry_config_id.get(), "el nuevo ID"),
                 self.entry_config_nombre.get(),
                 self.leer_numero(self.entry_config_cantidad.get(), "la cantidad"),
                 self.leer_numero(self.entry_config_precio.get(), "el precio"),
@@ -401,7 +436,7 @@ class SistemaInventarioGUI(ctk.CTk):
         ):
             return
         try:
-            main.RestaurarProducto(int(valores[0]))
+            main.RestaurarProducto(self.leer_entero(valores[0], "el ID"))
             self.label_mensaje_configuracion.configure(
                 text="Producto restaurado correctamente", text_color="green"
             )
@@ -423,7 +458,9 @@ class SistemaInventarioGUI(ctk.CTk):
         ):
             return
         try:
-            main.EliminarProductoDefinitivamente(int(valores[0]))
+            main.EliminarProductoDefinitivamente(
+                self.leer_entero(valores[0], "el ID")
+            )
             self.label_mensaje_configuracion.configure(
                 text="Producto eliminado definitivamente", text_color="green"
             )
@@ -454,37 +491,51 @@ class SistemaInventarioGUI(ctk.CTk):
         ).pack(pady=20)
 
         frame_formulario = ctk.CTkFrame(self.frame_principal)
-        frame_formulario.pack(fill="x", padx=20, pady=10)
-        for columna in range(4):
+        frame_formulario.pack(fill="x", padx=20, pady=6)
+        for columna in range(5):
             frame_formulario.grid_columnconfigure(columna, weight=1)
 
-        self.combo_producto_movimiento = ctk.CTkComboBox(
+        ctk.CTkLabel(
             frame_formulario,
-            values=["No hay productos activos"],
-            width=220
+            text="🔍",
+            font=ctk.CTkFont(size=18)
+        ).grid(row=0, column=0, padx=(8, 0), pady=8)
+
+        self.entry_busqueda_producto = ctk.CTkEntry(
+            frame_formulario,
+            placeholder_text="Buscar producto por ID o nombre",
+            width=190
         )
-        self.combo_producto_movimiento.grid(row=0, column=0, padx=10, pady=15)
+        self.entry_busqueda_producto.grid(row=0, column=1, padx=(4, 6), pady=8, sticky="ew")
+        self.entry_busqueda_producto.bind("<KeyRelease>", self.filtrar_productos_movimiento)
+
+        self.frame_sugerencias_producto = ctk.CTkFrame(
+            frame_formulario,
+            fg_color="transparent",
+            height=1
+        )
+        self.frame_sugerencias_producto.grid(row=1, column=1, columnspan=4, padx=(4, 6), sticky="ew")
 
         self.combo_tipo_movimiento = ctk.CTkComboBox(
             frame_formulario,
             values=["compra", "venta"],
-            width=220
+            width=160
         )
         self.combo_tipo_movimiento.set("compra")
-        self.combo_tipo_movimiento.grid(row=0, column=1, padx=10, pady=15)
+        self.combo_tipo_movimiento.grid(row=0, column=2, padx=6, pady=8)
 
-        self.entry_cantidad_movimiento = ctk.CTkEntry(frame_formulario, placeholder_text="Cantidad", width=220)
-        self.entry_cantidad_movimiento.grid(row=0, column=2, padx=10, pady=15)
+        self.entry_cantidad_movimiento = ctk.CTkEntry(frame_formulario, placeholder_text="Cantidad", width=150)
+        self.entry_cantidad_movimiento.grid(row=0, column=3, padx=6, pady=8)
 
         ctk.CTkButton(
             frame_formulario,
             text="Registrar Movimiento",
             command=self.ejecutar_registrar_movimiento,
             fg_color="#1f538d"
-        ).grid(row=1, column=0, columnspan=4, padx=10, pady=10, sticky="ew")
+        ).grid(row=0, column=4, padx=(6, 8), pady=8)
 
         self.label_mensaje_movimiento = ctk.CTkLabel(frame_formulario, text="", text_color="red")
-        self.label_mensaje_movimiento.grid(row=2, column=0, columnspan=4, pady=5)
+        self.label_mensaje_movimiento.grid(row=2, column=0, columnspan=5, pady=3)
 
         frame_historial = ctk.CTkFrame(self.frame_principal)
         frame_historial.pack(fill="both", expand=True, padx=20, pady=10)
@@ -494,15 +545,14 @@ class SistemaInventarioGUI(ctk.CTk):
             font=ctk.CTkFont(size=16, weight="bold")
         ).pack(pady=(10, 5))
 
-        columnas = ("Operacion", "ID Producto", "Producto", "Fecha", "Tipo", "Cantidad", "Monto")
+        columnas = ("ID", "Producto", "Fecha", "Tipo", "Cantidad", "Monto")
         self.tabla_historial = ttk.Treeview(
             frame_historial,
             columns=columnas,
             show="headings"
         )
         anchos = {
-            "Operacion": 90,
-            "ID Producto": 90,
+            "ID": 90,
             "Producto": 180,
             "Fecha": 155,
             "Tipo": 90,
@@ -526,7 +576,7 @@ class SistemaInventarioGUI(ctk.CTk):
 
     def ejecutar_registrar_movimiento(self):
         try:
-            producto_seleccionado = self.combo_producto_movimiento.get()
+            producto_seleccionado = self.entry_busqueda_producto.get()
             if " - " not in producto_seleccionado:
                 raise ValueError("No hay un producto disponible para operar")
             id_producto = int(producto_seleccionado.split(" - ", 1)[0])
@@ -544,22 +594,43 @@ class SistemaInventarioGUI(ctk.CTk):
             self.label_mensaje_movimiento.configure(text=str(error_backend), text_color="red")
 
     def cargar_productos_movimiento(self):
-        productos = main.ConsultarInventario()
-        opciones = [f"{producto[0]} - {producto[1]}" for producto in productos]
-        if opciones:
-            self.combo_producto_movimiento.configure(values=opciones)
-            if self.combo_producto_movimiento.get() not in opciones:
-                self.combo_producto_movimiento.set(opciones[0])
-        else:
-            self.combo_producto_movimiento.configure(values=["No hay productos activos"])
-            self.combo_producto_movimiento.set("No hay productos activos")
+        self.productos_movimiento = main.ConsultarInventario()
+        self.filtrar_productos_movimiento()
+
+    def filtrar_productos_movimiento(self, _evento=None):
+        texto = self.entry_busqueda_producto.get().strip().lower()
+        for widget in self.frame_sugerencias_producto.winfo_children():
+            widget.destroy()
+        if not texto:
+            return
+
+        opciones = [
+            f"{producto[0]} - {producto[1]}"
+            for producto in self.productos_movimiento
+            if texto in str(producto[0]).lower() or texto in producto[1].lower()
+        ]
+        for opcion in opciones[:5]:
+            ctk.CTkButton(
+                self.frame_sugerencias_producto,
+                text=opcion,
+                anchor="w",
+                height=28,
+                fg_color="#3a3a3a",
+                hover_color="#1f538d",
+                command=lambda opcion=opcion: self.seleccionar_producto_movimiento(opcion)
+            ).pack(fill="x", pady=1)
+
+    def seleccionar_producto_movimiento(self, producto):
+        self.entry_busqueda_producto.delete(0, "end")
+        self.entry_busqueda_producto.insert(0, producto)
+        for widget in self.frame_sugerencias_producto.winfo_children():
+            widget.destroy()
 
     def cargar_historial(self):
         for fila in self.tabla_historial.get_children():
             self.tabla_historial.delete(fila)
         for movimiento in main.ConsultarHistorial():
             valores = (
-                movimiento[0],
                 movimiento[1],
                 movimiento[2] or "Producto eliminado",
                 movimiento[3],
@@ -639,7 +710,7 @@ class SistemaInventarioGUI(ctk.CTk):
         frame_tabla = ctk.CTkFrame(self.frame_principal)
         frame_tabla.pack(fill="both", expand=True, padx=20, pady=10)
 
-        columnas = ("ID Producto", "Fecha", "Tipo", "Cantidad", "Monto")
+        columnas = ("ID", "Fecha", "Tipo", "Cantidad", "Monto")
         self.tabla_informe = ttk.Treeview(frame_tabla, columns=columnas, show="headings")
         for columna in columnas:
             self.tabla_informe.heading(columna, text=columna)
