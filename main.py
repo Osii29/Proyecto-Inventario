@@ -184,10 +184,11 @@ def EliminarProductoDefinitivamente(id_producto):
     with sqlite3.connect('inventario.db') as conn:
         cur = conn.cursor()
         cur.execute('''SELECT ID_Producto FROM Productos WHERE ID_Visible = ?;''', (id_producto,))
-        if cur.fetchone() is None:
+        producto = cur.fetchone()
+        if producto is None:
             raise ValueError("El producto no existe")
 
-        id_producto_real = cur.fetchone()[0]
+        id_producto_real = producto[0]
         cur.execute('''DELETE FROM Historial WHERE ID_Producto = ?;''', (id_producto_real,))
         cur.execute('''DELETE FROM Productos WHERE ID_Producto = ?;''', (id_producto_real,))
         conn.commit()

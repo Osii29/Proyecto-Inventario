@@ -84,6 +84,77 @@ class SistemaInventarioGUI(ctk.CTk):
         )
         self.entry_busqueda_inventario.pack(anchor="w", padx=20, pady=(0, 5))
         self.entry_busqueda_inventario.bind("<KeyRelease>", self.filtrar_inventario)
+
+        frame_formulario = ctk.CTkFrame(self.frame_principal)
+        frame_formulario.pack(fill="x", padx=20, pady=(0, 10))
+        for columna in range(4):
+            frame_formulario.grid_columnconfigure(columna, weight=1)
+
+        ctk.CTkLabel(
+            frame_formulario,
+            text="Registrar Nuevo Producto",
+            font=ctk.CTkFont(weight="bold")
+        ).grid(row=0, column=0, columnspan=4, pady=(10, 5))
+
+        self.entry_id_visible = ctk.CTkEntry(
+            frame_formulario,
+            placeholder_text="ID (obligatorio)",
+            width=200
+        )
+        self.entry_id_visible.grid(row=1, column=0, padx=10, pady=10)
+
+        self.entry_nombre = ctk.CTkEntry(
+            frame_formulario,
+            placeholder_text="Nombre del Producto",
+            width=200
+        )
+        self.entry_nombre.grid(row=1, column=1, padx=10, pady=10)
+
+        self.entry_cantidad = ctk.CTkEntry(
+            frame_formulario,
+            placeholder_text="Cantidad Inicial",
+            width=200
+        )
+        self.entry_cantidad.grid(row=1, column=2, padx=10, pady=10)
+
+        self.entry_precio = ctk.CTkEntry(
+            frame_formulario,
+            placeholder_text="Precio de Venta",
+            width=200
+        )
+        self.entry_precio.grid(row=1, column=3, padx=10, pady=10)
+
+        self.entry_costo = ctk.CTkEntry(
+            frame_formulario,
+            placeholder_text="Costo de Compra",
+            width=200
+        )
+        self.entry_costo.grid(row=2, column=0, padx=10, pady=10)
+
+        self.entry_unidad = ctk.CTkComboBox(
+            frame_formulario,
+            values=["pz", "kg", "g", "l", "ml", "m", "cm"],
+            width=200
+        )
+        self.entry_unidad.set("unidad")
+        self.entry_unidad.grid(row=2, column=1, padx=10, pady=10)
+
+        ctk.CTkButton(
+            frame_formulario,
+            text="Guardar Producto",
+            command=self.ejecutar_crear_producto,
+            fg_color="green"
+        ).grid(row=2, column=2, padx=10, pady=10, sticky="ew")
+
+        ctk.CTkButton(
+            frame_formulario,
+            text="Eliminar Seleccionado",
+            command=self.ejecutar_eliminar_producto,
+            fg_color="#b3261e"
+        ).grid(row=2, column=3, padx=10, pady=10, sticky="ew")
+
+        self.label_mensaje = ctk.CTkLabel(frame_formulario, text="", text_color="red")
+        self.label_mensaje.grid(row=3, column=0, columnspan=4, pady=5)
         
         # Contenedor para la tabla
         frame_tabla = ctk.CTkFrame(self.frame_principal)
@@ -121,57 +192,6 @@ class SistemaInventarioGUI(ctk.CTk):
         
         scrollbar.pack(side="right", fill="y")
         self.tabla.pack(side="left", fill="both", expand=True)
-        # Contenedor para el formulario de registro
-        frame_formulario = ctk.CTkScrollableFrame(self.frame_principal, height=205)
-        frame_formulario.pack(fill="x", padx=20, pady=10)
-        for columna in range(4):
-            frame_formulario.grid_columnconfigure(columna, weight=1)
-        
-        ctk.CTkLabel(frame_formulario, text="Registrar Nuevo Producto", font=ctk.CTkFont(weight="bold")).grid(row=0, column=0, columnspan=4, pady=(10, 5))
-
-        self.entry_id_visible = ctk.CTkEntry(frame_formulario, placeholder_text="ID (obligatorio)", width=200)
-        self.entry_id_visible.grid(row=1, column=0, padx=10, pady=10)
-
-        self.entry_nombre = ctk.CTkEntry(frame_formulario, placeholder_text="Nombre del Producto", width=200)
-        self.entry_nombre.grid(row=1, column=1, padx=10, pady=10)
-
-        self.entry_cantidad = ctk.CTkEntry(frame_formulario, placeholder_text="Cantidad Inicial", width=200)
-        self.entry_cantidad.grid(row=1, column=2, padx=10, pady=10)
-
-        self.entry_precio = ctk.CTkEntry(frame_formulario, placeholder_text="Precio de Venta", width=200)
-        self.entry_precio.grid(row=1, column=3, padx=10, pady=10)
-
-        self.entry_costo = ctk.CTkEntry(frame_formulario, placeholder_text="Costo de Compra", width=200)
-        self.entry_costo.grid(row=2, column=0, padx=10, pady=10)
-
-        self.entry_unidad = ctk.CTkComboBox(
-            frame_formulario,
-            values=["pz", "kg", "g", "l", "ml", "m", "cm"],
-            width=200
-        )
-        self.entry_unidad.set("unidad")
-        self.entry_unidad.grid(row=2, column=1, padx=10, pady=10)
-
-        btn_guardar = ctk.CTkButton(
-            frame_formulario,
-            text="Guardar Producto",
-            command=self.ejecutar_crear_producto,
-            fg_color="green"
-        )
-        btn_guardar.grid(row=3, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
-
-        btn_eliminar = ctk.CTkButton(
-            frame_formulario,
-            text="Eliminar Seleccionado",
-            command=self.ejecutar_eliminar_producto,
-            fg_color="#b3261e"
-        )
-        btn_eliminar.grid(row=3, column=2, columnspan=2, padx=10, pady=10, sticky="ew")
-        
-        # Etiqueta para mostrar mensajes de error o éxito
-        self.label_mensaje = ctk.CTkLabel(frame_formulario, text="", text_color="red")
-        self.label_mensaje.grid(row=4, column=0, columnspan=4, pady=5)
-
         # Invocación a la base de datos
         self.cargar_datos_inventario()
         
@@ -314,7 +334,7 @@ class SistemaInventarioGUI(ctk.CTk):
         ).pack(side="left", padx=10, pady=8)
         ctk.CTkButton(
             frame_acciones,
-            text="Eliminar Historial",
+            text="Eliminar definitivamente",
             command=self.ejecutar_eliminar_definitivo,
             fg_color="#8b0000",
             hover_color="#5c0000",
