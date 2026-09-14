@@ -136,7 +136,7 @@ class SistemaInventarioGUI(ctk.CTk):
             values=["pz", "kg", "g", "l", "ml", "m", "cm"],
             width=200
         )
-        self.entry_unidad.set("unidad")
+        self.entry_unidad.set("")
         self.entry_unidad.grid(row=2, column=1, padx=10, pady=10)
 
         ctk.CTkButton(
@@ -201,6 +201,9 @@ class SistemaInventarioGUI(ctk.CTk):
 
         import main
         try:
+            if not unidad.strip():
+                raise ValueError("La unidad de medida es obligatoria")
+
             cantidad = self.leer_numero(self.entry_cantidad.get(), "la cantidad")
             precio = self.leer_numero(self.entry_precio.get(), "el precio")
             costo = self.leer_numero(self.entry_costo.get(), "el costo")
@@ -218,7 +221,7 @@ class SistemaInventarioGUI(ctk.CTk):
             self.entry_cantidad.delete(0, 'end')
             self.entry_precio.delete(0, 'end')
             self.entry_costo.delete(0, 'end')
-            self.entry_unidad.delete(0, 'end')
+            self.entry_unidad.set("")
         except ValueError as error_backend:
             # Interceptar y desplegar el error generado por las reglas de negocio del backend
             self.label_mensaje.configure(text=str(error_backend), text_color="red")
